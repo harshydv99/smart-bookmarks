@@ -1,36 +1,205 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Smart Bookmarks App
 
-## Getting Started
+A real-time bookmark manager built with **Next.js + Supabase + Socket.IO**.
 
-First, run the development server:
+Users can:
+- Sign in with Google (Supabase Auth)
+- Add and delete personal bookmarks
+- See bookmark updates sync across multiple tabs in real time
+
+## Tech Stack
+
+- Frontend: Next.js 14 (App Router), React 18, Tailwind CSS
+- Auth + Database: Supabase (OAuth + Postgres)
+- Realtime transport: Socket.IO (custom Node server)
+
+## Project Structure
+
+```text
+.
+├── app/                    # Next.js App Router pages
+│   ├── page.js            # Landing + auth gate
+│   └── dashboard/page.js  # Protected dashboard UI
+├── components/            # Reusable UI components
+├── lib/
+│   ├── auth.js            # Sign-in/sign-out helpers
+│   ├── bookmarks.js       # Bookmark state + socket sync hook
+│   ├── socket.js          # Socket.IO client
+│   └── supabase-client.js # Browser Supabase client factory
+├── server/
+│   ├── index.js           # Socket.IO server + Supabase writes
+│   └── package.json       # Server dependencies
+└── README.md
+```
+
+## Prerequisites
+
+- Node.js 18+
+- npm
+- A Supabase project
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# Frontend socket endpoint
+NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
+
+# Supabase (frontend)
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+
+# Optional app URL used in some OAuth/callback setups
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+
+# Optional (not currently enforced in server code)
+CORS_ORIGINS=*
+```
+
+The Socket.IO server (`server/index.js`) currently reads:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`
+
+Add this to root `.env` (or `server/.env` and load accordingly):
+
+```bash
+NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
+```
+
+## Supabase Setup
+
+### 1. Enable Google OAuth
+
+In Supabase Dashboard:
+- `Authentication` -> `Providers` -> `Google` -> enable
+- Configure Google client ID/secret and authorized redirect URLs
+
+### 2. Create `bookmarks` table
+
+Run this SQL in Supabase SQL editor:
+
+```sql
+create table if not exists public.bookmarks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  url text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_bookmarks_user_id on public.bookmarks(user_id);
+
+alter table public.bookmarks enable row level security;
+
+create policy "Users can view own bookmarks"
+on public.bookmarks
+for select
+using (auth.uid() = user_id);
+
+create policy "Users can insert own bookmarks"
+on public.bookmarks
+for insert
+with check (auth.uid() = user_id);
+
+create policy "Users can delete own bookmarks"
+on public.bookmarks
+for delete
+using (auth.uid() = user_id);
+```
+
+## Installation
+
+Install frontend deps:
+
+```bash
+npm install
+```
+
+Install socket server deps:
+
+```bash
+cd server
+npm install
+cd ..
+```
+
+## Run Locally
+
+Start frontend (terminal 1):
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Start websocket server (terminal 2):
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```bash
+cd server
+node index.js
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+App URLs:
+- Frontend: `http://localhost:3000`
+- Socket server: `http://localhost:3001`
 
-## Learn More
+## How Auth + Realtime Flow Works
 
-To learn more about Next.js, take a look at the following resources:
+1. User signs in on `/` using Google OAuth.
+2. App routes authenticated users to `/dashboard`.
+3. `useBookmarks` hook connects to Socket.IO with `session.access_token`.
+4. Socket server verifies token (`supabase.auth.getUser(token)`).
+5. Add/delete events are written to DB server-side and broadcast to all user tabs.
+6. Tabs update local state instantly from websocket events.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Frontend scripts (root `package.json`):
+- `npm run dev` - start Next.js dev server
+- `npm run build` - production build
+- `npm run start` - run production server
 
-## Deploy on Vercel
+## Troubleshooting
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 1. Login works but dashboard shows unauthorized briefly
+This is handled by an auth-check grace flow in `app/dashboard/page.js`. If you still see flicker, verify auth callback/session persistence in Supabase settings.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 2. Realtime updates not syncing
+- Ensure Socket.IO server is running on `NEXT_PUBLIC_SOCKET_URL`
+- Confirm frontend and server are using the same Supabase project
+- Check browser console for socket `connect_error`
+
+### 3. Add/delete fails silently
+- Check websocket server logs
+- Verify `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` is valid
+- Confirm RLS policies exist and table name is `public.bookmarks`
+
+### 4. CSS not applying
+Ensure `postcss.config.mjs` includes:
+
+```js
+const config = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+
+export default config;
+```
+
+### 5. Build warning about `reactCompiler`
+If you see `Unrecognized key(s) in object: 'reactCompiler'`, remove or update that key in `next.config.mjs` for your Next.js version.
+
+## Security Notes
+
+- Socket auth is token-based and user-scoped on the server.
+- The server currently expects a service role key via `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` (name is misleading). For production, prefer a non-`NEXT_PUBLIC_` env name and keep it server-only.
+- CORS is currently permissive (`origin: "*"`) in `server/index.js`. Lock this down before production.
+
+## Future Improvements
+
+- Add root script to start frontend + socket server together (`concurrently`)
+- Add TypeScript types for socket event contracts
+- Add tests for auth guard and realtime state handling
+- Add deployment docs (Vercel + separate websocket host)
