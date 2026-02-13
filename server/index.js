@@ -16,10 +16,21 @@ if (!supabaseUrl || !supabaseservicerolekey) {
 const PORT = process.env.PORT || 3001;
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const io = new Server(server, {
   cors: {
-    origin: "https://smart-bookmarks-harshydv99.vercel.app, https://smart-bookmarks.onrender.com, http://localhost:3000",
+    origin:
+      allowedOrigins.length > 0
+        ? allowedOrigins
+        : [
+            "http://localhost:3000",
+            "https://smart-bookmarks-harshydv99.vercel.app",
+          ],
+    methods: ["GET", "POST"],
   },
 });
 
