@@ -1,4 +1,5 @@
 import http from "http";
+import express from "express";
 import { Server } from "socket.io";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
@@ -13,14 +14,15 @@ if (!supabaseUrl || !supabaseservicerolekey) {
 }
 
 const PORT = process.env.PORT || 3001;
-const server = http.createServer();
+const app = express();
+const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    // origin: "https://smart-bookmarks-harshydv99.vercel.app",
+    origin: "http://localhost:3000",
   },
 });
-
 
 const supabase = createClient(supabaseUrl, supabaseservicerolekey);
 
@@ -52,8 +54,10 @@ io.use(async (socket, next) => {
 io.on("connection", (socket) => {
   const userId = socket.data.userId;
   socket.join(userId);
+  console.log(`✅ Client connected: ${socket.data.userId}`);
 
   socket.on("bookmark-added", async ({ title, url }, ack) => {
+    console.log(`Received add request for bookmark "${title}" from user ${userId}`);
     const { data, error } = await supabase
       .from("bookmarks")
       .insert({ title, url, user_id: userId })
@@ -70,6 +74,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("bookmark-deleted", async ({ id }, ack) => {
+    console.log(`Received delete request for bookmark ${id} from user ${userId}`);
     const { error } = await supabase
       .from("bookmarks")
       .delete()
@@ -88,6 +93,10 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("❌ Client disconnected:", socket.id);
   });
+});
+
+app.get("/", (req, res) => {
+  res.send("OK");
 });
 
 server.listen(PORT, () => {
