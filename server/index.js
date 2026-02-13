@@ -19,8 +19,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    // origin: "https://smart-bookmarks-harshydv99.vercel.app",
-    origin: "http://localhost:3000",
+    origin: "https://smart-bookmarks-harshydv99.vercel.app, https://smart-bookmarks.onrender.com, http://localhost:3000",
   },
 });
 
