@@ -1,8 +1,9 @@
+import http from "http";
 import { Server } from "socket.io";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
-dotenv.config({ path: "../.env" });
+dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseservicerolekey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
@@ -11,11 +12,15 @@ if (!supabaseUrl || !supabaseservicerolekey) {
   throw new Error("Missing Supabase env vars for websocket server");
 }
 
-const io = new Server(3001, {
+const PORT = process.env.PORT || 3001;
+const server = http.createServer();
+
+const io = new Server(server, {
   cors: {
     origin: "*",
   },
 });
+
 
 const supabase = createClient(supabaseUrl, supabaseservicerolekey);
 
@@ -79,4 +84,12 @@ io.on("connection", (socket) => {
     io.to(userId).emit("bookmark-deleted", { id });
     ack?.({ ok: true, data: { id } });
   });
+
+  socket.on("disconnect", () => {
+    console.log("❌ Client disconnected:", socket.id);
+  });
+});
+
+server.listen(PORT, () => {
+  console.log(`🚀 Realtime server running on port ${PORT}`);
 });
