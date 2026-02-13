@@ -34,8 +34,8 @@ Users can:
 
 ## Prerequisites
 
-- Node.js 18+
 - npm
+- Node.js 18+
 - A Supabase project
 
 ## Environment Variables
@@ -52,16 +52,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 
 # Optional app URL used in some OAuth/callback setups
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
-
-# Optional (not currently enforced in server code)
-CORS_ORIGINS=*
 ```
 
 The Socket.IO server (`server/index.js`) currently reads:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`
 
-Add this to root `.env` (or `server/.env` and load accordingly):
+Add this to root `.env` and load accordingly:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
@@ -159,7 +156,7 @@ Frontend scripts (root `package.json`):
 - `npm run build` - production build
 - `npm run start` - run production server
 
-## Troubleshooting
+## Problems Encountered & Solved:
 
 ### 1. Login works but dashboard shows unauthorized briefly
 This is handled by an auth-check grace flow in `app/dashboard/page.js`. If you still see flicker, verify auth callback/session persistence in Supabase settings.
@@ -174,32 +171,8 @@ This is handled by an auth-check grace flow in `app/dashboard/page.js`. If you s
 - Verify `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` is valid
 - Confirm RLS policies exist and table name is `public.bookmarks`
 
-### 4. CSS not applying
-Ensure `postcss.config.mjs` includes:
-
-```js
-const config = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-};
-
-export default config;
-```
-
-### 5. Build warning about `reactCompiler`
-If you see `Unrecognized key(s) in object: 'reactCompiler'`, remove or update that key in `next.config.mjs` for your Next.js version.
-
 ## Security Notes
 
 - Socket auth is token-based and user-scoped on the server.
 - The server currently expects a service role key via `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` (name is misleading). For production, prefer a non-`NEXT_PUBLIC_` env name and keep it server-only.
 - CORS is currently permissive (`origin: "*"`) in `server/index.js`. Lock this down before production.
-
-## Future Improvements
-
-- Add root script to start frontend + socket server together (`concurrently`)
-- Add TypeScript types for socket event contracts
-- Add tests for auth guard and realtime state handling
-- Add deployment docs (Vercel + separate websocket host)
